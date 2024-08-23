@@ -1,67 +1,58 @@
 #!/bin/bash
 
-printf "\e[1;32mInstalling Essential Packages...\e[0m\n"
-sudo apt install -y build-essential cmake cmake-extras meson ninja-build curl wget gettext libnotify-bin libnotify-dev libxkbcommon-dev
-
-# Define the packages for the first question
-terminals=("alacritty" "kitty" "konsole" "terminator" "gnome-terminal" "xfce4-terminal")
-
-# Define the packages for the second question
-file_managers=("thunar" "nautilus" "dolphin" "ranger" "lf")
-
-# Function to display and select packages from a given array
+# Function to display and handle package selection
 select_packages() {
+    local category="$1"
+    shift
     local packages=("$@")
-    local selected_packages=()
-    local user_input
+    local selected=()
+    local selection
 
-    echo "Please select the packages to install:"
+    echo "Choose $category to install (space-separated list, e.g., 1 3 5):"
     for i in "${!packages[@]}"; do
         echo "$((i+1)). ${packages[i]}"
     done
-    echo "A. All of the above"
+    read -rp "Selection: " selection
 
-    while true; do
-        read -p "Enter your choice (e.g., 1 3 5 or A): " user_input
-        if [[ "$user_input" == "A" || "$user_input" == "a" ]]; then
-            selected_packages=("${packages[@]}")
-            break
-        elif [[ "$user_input" =~ ^[0-9\ ]+$ ]]; then
-            # Convert user input into an array of indices
-            for index in $user_input; do
-                if ((index > 0 && index <= ${#packages[@]})); then
-                    selected_packages+=("${packages[index-1]}")
-                else
-                    echo "Invalid input. Please enter valid numbers or 'A' to select all."
-                    selected_packages=()
-                    break
-                fi
-            done
-            [[ ${#selected_packages[@]} -gt 0 ]] && break
-        else
-            echo "Invalid input. Please enter valid numbers or 'A' to select all."
-        fi
+    for index in $selection; do
+        selected+=("${packages[index-1]}")
     done
 
-    echo "${selected_packages[@]}"
+    echo "${selected[@]}"
 }
 
-# Question 1: Select packages to install
-echo "Question 1:"
-selected_terminals=($(select_packages "${terminals[@]}"))
+# Function to install selected packages
+install_selected_packages() {
+    local packages=("$@")
+    if [ ${#packages[@]} -gt 0 ]; then
+        echo "Installing selected packages: ${packages[*]}"
+        sudo apt-get install -y "${packages[@]}"
+    else
+        echo "No packages selected for installation."
+    fi
+}
 
-# Question 2: Select packages to install
-echo "Question 2:"
-selected_file_managers=($(select_packages "${file_managers[@]}"))
+# Define the package groups
+declare -A package_groups=(
+    ["File Managers"]="thunar pcmanfm krusader nautilus nemo dolphin ranger nnn lf"
+    ["Graphics"]="gimp flameshot eog sxiv qimgv inkscape scrot"
+    ["Terminals"]="alacritty gnome-terminal kitty konsole terminator xfce4-terminal"
+    ["Text Editors"]="geany kate gedit l3afpad mousepad pluma"
+    ["Multimedia"]="mpv vlc audacity kdenlive obs-studio rhythmbox ncmpcpp mkvtoolnix-gui"
+    ["Utilities"]="gparted gnome-disk-utility neofetch nitrogen numlockx galculator cpu-x dnsutils whois curl tree btop htop bat brightnessctl redshift"
+)
 
-# Combine selected packages from both questions
-all_selected_packages=("${selected_terminals[@]}" "${selected_file_managers[@]}")
+# Array to collect all selected packages
+all_selected_packages=()
 
-# Install the selected packages
-if [ ${#all_selected_packages[@]} -gt 0 ]; then
-    echo "Installing selected packages..."
-    sudo apt-get update
-    sudo apt-get install -y "${all_selected_packages[@]}"
-else
-    echo "No packages selected for installation."
-fi
+# Main loop to handle each category
+for category in "${!package_groups[@]}"; do
+    # Convert the space-separated list to an array
+    IFS=' ' read -r -a packages <<< "${package_groups[$category]}"
+    # Call the select_packages function and collect the result
+    selected=$(select_packages "$category" "${packages[@]}")
+    all_selected_packages+=($selected)
+done
+
+# Install all selected packages
+install_selected_packages "${all_selected_packages[@]}"
